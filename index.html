@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Car Press Photo Generator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for professional look and responsiveness */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        .container {
+            max-width: 900px;
+        }
+        select, input[type="text"] {
+            border: 1px solid #d1d5db;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            transition: border-color 0.2s;
+            background-color: white;
+        }
+        select:focus, input[type="text"]:focus {
+            border-color: #3b82f6; /* Blue 500 */
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        #generate-button {
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        #generate-button:hover:not(:disabled) {
+            background-color: #1e40af; /* Blue 800 */
+        }
+        #generate-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        /* Spinner styles */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div class="container mx-auto bg-white p-6 sm:p-10 rounded-xl shadow-2xl">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-6 text-center">
+            AI Car Press Photo Generator
+        </h1>
+        <p class="text-center text-gray-600 mb-8">Select a car model and year to generate a high-resolution, transparent-background press photo.</p>
+
+        <!-- API Key Input -->
+        <div class="mb-8 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+            <label for="api-key-input" class="block text-sm font-medium text-gray-700 mb-2">
+                Gemini API Key (Required)
+            </label>
+            <input type="text" id="api-key-input" placeholder="Enter your Gemini API Key here" class="w-full text-sm">
+        </div>
+
+        <!-- Selection Menus -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div>
+                <label for="manufacturer-select" class="block text-sm font-medium text-gray-700 mb-2">Manufacturer</label>
+                <select id="manufacturer-select" class="w-full text-sm">
+                    <option value="" disabled selected>Select Manufacturer</option>
+                </select>
+            </div>
+            <div>
+                <label for="model-select" class="block text-sm font-medium text-gray-700 mb-2">Model</label>
+                <select id="model-select" class="w-full text-sm" disabled>
+                    <option value="" disabled selected>Select Model</option>
+                </select>
+            </div>
+            <div>
+                <label for="year-select" class="block text-sm font-medium text-gray-700 mb-2">Year</label>
+                <select id="year-select" class="w-full text-sm" disabled>
+                    <option value="" disabled selected>Select Year</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Action Button -->
+        <div class="text-center mb-10">
+            <button id="generate-button"
+                    class="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition duration-150 ease-in-out disabled:bg-gray-400 flex items-center justify-center mx-auto"
+                    disabled>
+                <span id="button-text">Generate Car Photo</span>
+                <div id="loading-indicator" class="spinner ml-3 hidden"></div>
+            </button>
+        </div>
+
+        <!-- Image Output and Status -->
+        <div id="status-message" class="text-center text-red-500 mb-4 font-medium hidden"></div>
+
+        <div id="image-container" class="min-h-[300px] border-4 border-dashed border-gray-200 rounded-xl flex items-center justify-center p-4 overflow-hidden bg-gray-50">
+            <p class="text-gray-500 text-center">Your generated press photo will appear here.</p>
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase Setup (Required structure, but not used for core functionality)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        // -------------------------------------------------------------------
+        // 1. EMBEDDED CAR DATA (Parsed from user's CSV file)
+        // -------------------------------------------------------------------
+
+        const RAW_CSV_DATA = `car brand,car model,manufacturing year,car full name
+"jeep","jeep wrangler",1998,"jeep wrangler 1998"
+"toyota","toyota 4runner",2005,"toyota 4runner 2005"
+"toyota","toyota tundra",2002,"toyota tundra 2002"
+"toyota","toyota tacoma",1998,"toyota tacoma 1998"
+"ford","ford ranger",1990,"ford ranger 1990"
+"toyota","toyota avalon",1995,"toyota avalon 1995"
+"chevrolet","chevrolet camaro",2000,"chevrolet camaro 2000"
+"toyota","toyota camry",1998,"toyota camry 1998"
+"gmc","gmc savana",1996,"gmc savana 1996"
+"chevrolet","chevrolet silverado-2500hd",2005,"chevrolet silverado-2500hd 2005"
+"chevrolet","chevrolet express-cargo",2008,"chevrolet express-cargo 2008"
+"chevrolet","chevrolet trailblazer",2005,"chevrolet trailblazer 2005"
+"chevrolet","chevrolet blazer",1990,"chevrolet blazer 1990"
+"chevrolet","chevrolet camaro",1994,"chevrolet camaro 1994"
+"jeep","jeep gladiator",2023,"jeep gladiator 2023"
+"lexus","lexus es-250",2023,"lexus es-250 2023"
+"gmc","gmc sierra-2500hd",2023,"gmc sierra-2500hd 2023"
+"bmw","bmw 7-series",2020,"bmw 7-series 2020"
+"bmw","bmw x5-m",2023,"bmw x5-m 2023"
+"audi","audi sq5-sportback",2021,"audi sq5-sportback 2021"
+"dodge","dodge challenger",2023,"dodge challenger 2023"
+"hyundai","hyundai elantra",2023,"hyundai elantra 2023"
+"toyota","toyota tundra",2023,"toyota tundra 2023"
+"honda","honda cr-v",2023,"honda cr-v 2023"
+"bmw","bmw 8-series",2023,"bmw 8-series 2023"
+"lexus","lexus es-300h",2023,"lexus es-300h 2023"
+"toyota","toyota gr-supra",2022,"toyota gr-supra 2022"
+"lexus","lexus rc-f",2022,"lexus rc-f 2022"`;
+
+        /**
+         * Parses the raw CSV string into a structured array of car objects.
+         * @param {string} csvText
+         * @returns {Array<{make: string, model: string, year: number}>}
+         */
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            if (lines.length <= 1) return []; // Only header or empty
+
+            // Assuming headers are: car brand, car model, manufacturing year
+            const data = [];
+            
+            // Start from index 1 to skip the header row
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
+                // Simple regex to split by comma, ignoring commas inside quotes,
+                // and then cleaning up surrounding quotes/whitespace.
+                const values = line.match(/(?:\"([^\"]*(?:\"\"[^\"]*)*)\")|([^\,]+)/g)
+                                 .map(v => v.trim().replace(/^"|"$/g, ''));
+                
+                // Ensure we have at least the three required columns
+                if (values.length >= 3) {
+                    data.push({
+                        make: values[0].toLowerCase(),
+                        model: values[1].toLowerCase(),
+                        year: parseInt(values[2], 10)
+                    });
+                }
+            }
+            return data;
+        }
+
+        let CAR_DATA = parseCSV(RAW_CSV_DATA);
+
+        // Process data into a hierarchical map for dropdown dependencies
+        const carMap = {};
+        CAR_DATA.forEach(car => {
+            const manufacturer = car.make.toLowerCase();
+            const model = car.model;
+            const year = car.year;
+
+            if (!carMap[manufacturer]) {
+                carMap[manufacturer] = {};
+            }
+            if (!carMap[manufacturer][model]) {
+                carMap[manufacturer][model] = [];
+            }
+            if (!carMap[manufacturer][model].includes(year)) {
+                carMap[manufacturer][model].push(year);
+                carMap[manufacturer][model].sort((a, b) => b - a); // Sort years descending
+            }
+        });
+
+        // -------------------------------------------------------------------
+        // 2. DOM Elements and Constants
+        // -------------------------------------------------------------------
+
+        const manufacturerSelect = document.getElementById('manufacturer-select');
+        const modelSelect = document.getElementById('model-select');
+        const yearSelect = document.getElementById('year-select');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const generateButton = document.getElementById('generate-button');
+        const buttonText = document.getElementById('button-text');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const imageContainer = document.getElementById('image-container');
+        const statusMessage = document.getElementById('status-message');
+
+        const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict";
+        const MAX_RETRIES = 5;
+
+        let currentApiKey = '';
+
+        // -------------------------------------------------------------------
+        // 3. Dropdown Logic
+        // -------------------------------------------------------------------
+
+        function clearAndDisable(element, defaultText) {
+            element.innerHTML = `<option value="" disabled selected>${defaultText}</option>`;
+            element.disabled = true;
+        }
+
+        function populateSelect(element, items) {
+            element.disabled = false;
+            element.innerHTML = `<option value="" disabled selected>Select...</option>`;
+            items.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item;
+                
+                // Fix: Check if the item is a string before attempting to split it.
+                // Years are numbers and should be used directly for display.
+                if (typeof item === 'string') {
+                    // Format manufacturer or model names (e.g., "gmc-sierra-2500hd" -> "Gmc Sierra 2500hd")
+                    option.textContent = item.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+                } else {
+                    // Use years (numbers) directly for display
+                    option.textContent = item;
+                }
+                
+                element.appendChild(option);
+            });
+        }
+
+        function populateManufacturers() {
+            const manufacturers = Object.keys(carMap).sort();
+            populateSelect(manufacturerSelect, manufacturers);
+            manufacturerSelect.value = ""; // Reset to "Select Manufacturer"
+        }
+
+        function updateModels() {
+            clearAndDisable(modelSelect, 'Select Model');
+            clearAndDisable(yearSelect, 'Select Year');
+            generateButton.disabled = true;
+
+            const selectedManufacturer = manufacturerSelect.value;
+            if (selectedManufacturer && carMap[selectedManufacturer]) {
+                const models = Object.keys(carMap[selectedManufacturer]).sort();
+                populateSelect(modelSelect, models);
+            }
+        }
+
+        function updateYears() {
+            clearAndDisable(yearSelect, 'Select Year');
+            generateButton.disabled = true;
+
+            const selectedManufacturer = manufacturerSelect.value;
+            const selectedModel = modelSelect.value;
+
+            if (selectedManufacturer && selectedModel && carMap[selectedManufacturer] && carMap[selectedManufacturer][selectedModel]) {
+                const years = carMap[selectedManufacturer][selectedModel];
+                populateSelect(yearSelect, years);
+            }
+        }
+
+        function checkFormValidity() {
+            const manufacturer = manufacturerSelect.value;
+            const model = modelSelect.value;
+            const year = yearSelect.value;
+            const apiKey = apiKeyInput.value.trim();
+
+            currentApiKey = apiKey;
+
+            // Enable button only if all three selections are made and API key is present
+            generateButton.disabled = !(manufacturer && model && year && apiKey);
+        }
+
+        // Initialize and setup event listeners
+        window.onload = () => {
+            populateManufacturers();
+
+            // Dependency listeners
+            manufacturerSelect.addEventListener('change', updateModels);
+            manufacturerSelect.addEventListener('change', checkFormValidity);
+
+            modelSelect.addEventListener('change', updateYears);
+            modelSelect.addEventListener('change', checkFormValidity);
+
+            yearSelect.addEventListener('change', checkFormValidity);
+
+            apiKeyInput.addEventListener('input', checkFormValidity);
+
+            generateButton.addEventListener('click', handleGeneration);
+        };
+
+        // -------------------------------------------------------------------
+        // 4. API Logic
+        // -------------------------------------------------------------------
+
+        function setGenerating(isGenerating) {
+            // Note: We avoid re-enabling the button if all fields aren't valid
+            generateButton.disabled = isGenerating || !checkFormValidity();
+            buttonText.textContent = isGenerating ? 'Generating...' : 'Generate Car Photo';
+            loadingIndicator.classList.toggle('hidden', !isGenerating);
+        }
+
+        function displayMessage(message, isError = false) {
+            statusMessage.textContent = message;
+            statusMessage.classList.remove('hidden', 'text-red-500', 'text-green-500');
+            statusMessage.classList.add(isError ? 'text-red-500' : 'text-green-500');
+            if (!message) statusMessage.classList.add('hidden');
+        }
+
+        async function generateCarPressPhoto(make, model, year, apiKey) {
+            const fullPrompt = (
+                `Professional, award-winning studio press photo of a ${year} ${make} ${model}. `
+                + `Studio lighting, high resolution, photorealistic, viewed from the front quarter angle, `
+                + `absolutely no background, isolated on a pure white background for masking, perfect edges, high quality render.`
+            );
+
+            console.log(`Prompt: ${fullPrompt}`);
+
+            const payload = {
+                "instances": [{
+                    "prompt": fullPrompt,
+                    "negativePrompt": "shadows, reflection, blurred, artifacts, low resolution, people, road, nature, city, street, text, blurry, watermark"
+                }],
+                "parameters": {
+                    "sampleCount": 1,
+                    "aspectRatio": "4:3"
+                }
+            };
+
+            for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+                try {
+                    const response = await fetch(`${API_URL}?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.status === 429) {
+                        throw new Error("Rate limit exceeded. Please wait and try again.");
+                    }
+
+                    if (!response.ok) {
+                        const errorBody = await response.json();
+                        throw new Error(errorBody.error?.message || `API Request failed with status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const prediction = result?.predictions?.[0];
+
+                    if (prediction && prediction.bytesBase64Encoded) {
+                        return `data:image/png;base64,${prediction.bytesBase64Encoded}`;
+                    } else {
+                        throw new Error("API response was successful, but no image data was found.");
+                    }
+
+                } catch (e) {
+                    console.error(`Attempt ${attempt + 1} failed:`, e.message);
+                    if (attempt < MAX_RETRIES - 1) {
+                        const waitTime = Math.pow(2, attempt) * 1000;
+                        console.log(`Retrying in ${waitTime / 1000} seconds...`);
+                        displayMessage(`Generation failed. Retrying in ${waitTime / 1000}s...`, true);
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                    } else {
+                        throw new Error(`Failed to generate image after ${MAX_RETRIES} attempts. Error: ${e.message}`);
+                    }
+                }
+            }
+            return null; // Should be unreachable
+        }
+
+        async function handleGeneration() {
+            setGenerating(true);
+            displayMessage('', false);
+            imageContainer.innerHTML = '<p class="text-gray-500 text-center">Generating high-resolution image...</p>';
+
+            const make = manufacturerSelect.value;
+            const model = modelSelect.value;
+            const year = yearSelect.value;
+            const apiKey = apiKeyInput.value.trim();
+
+            if (!make || !model || !year || !apiKey) {
+                displayMessage("Please complete all selections and enter your API key.", true);
+                setGenerating(false);
+                return;
+            }
+
+            try {
+                const imageUrl = await generateCarPressPhoto(make, model, year, apiKey);
+
+                if (imageUrl) {
+                    imageContainer.innerHTML = `<img src="${imageUrl}" alt="${year} ${make} ${model} Press Photo" class="w-full h-auto object-contain rounded-lg shadow-lg">`;
+                    displayMessage('Image successfully generated!', false);
+                } else {
+                    displayMessage('Could not generate image. Check console for details.', true);
+                }
+            } catch (error) {
+                imageContainer.innerHTML = '<p class="text-gray-500 text-center">Your generated press photo will appear here.</p>';
+                displayMessage(error.message, true);
+            } finally {
+                setGenerating(false);
+            }
+        }
+    </script>
+</body>
+</html>
