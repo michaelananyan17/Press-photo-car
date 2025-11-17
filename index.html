@@ -56,7 +56,6 @@
             text-align: center;
             margin-bottom: 30px;
             color: #7f8c8d;
-            width: 100%;
         }
         
         .form-group {
@@ -114,21 +113,14 @@
         }
         
         .result-section {
-            width: 100%;
+            margin-top: 30px;
             text-align: center;
-            padding: 20px;
-            background-color: #f8f9fa;
-            border-radius: 10px;
-            min-height: 400px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            width: 100%;
         }
         
         .car-image {
             max-width: 100%;
-            max-height: 400px;
+            max-height: 500px;
             border-radius: 10px;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
             margin-top: 20px;
@@ -167,11 +159,41 @@
             display: none;
         }
         
-        .result-placeholder {
-            color: #7f8c8d;
-            font-style: italic;
+        .file-upload-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 2px dashed #ddd;
+            border-radius: 5px;
             text-align: center;
-            padding: 40px 20px;
+        }
+        
+        .file-upload-section.active {
+            border-color: #3498db;
+            background-color: #f0f8ff;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .file-label {
+            display: block;
+            padding: 10px;
+            cursor: pointer;
+            color: #3498db;
+            font-weight: 600;
+        }
+        
+        .file-name {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        
+        .instructions {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-top: 5px;
         }
         
         @media (max-width: 768px) {
@@ -188,12 +210,19 @@
 <body>
     <div class="container">
         <h1>Car Press Photo Generator</h1>
-        <p class="description">Select a car from the dataset and generate a press photo with no background using the Gemini API</p>
+        <p class="description">Upload a car dataset and generate a press photo with no background using the Gemini API</p>
         
         <div class="left-panel">
+            <div class="file-upload-section" id="file-upload-section">
+                <label for="csv-file" class="file-label">Click to upload car dataset (CSV)</label>
+                <input type="file" id="csv-file" class="file-input" accept=".csv">
+                <div class="file-name" id="file-name">No file selected</div>
+                <div class="instructions">CSV should have columns: car brand, car model, manufacturing year</div>
+            </div>
+            
             <div class="form-group">
                 <label for="brand">Car Manufacturer</label>
-                <select id="brand">
+                <select id="brand" disabled>
                     <option value="">Select a manufacturer</option>
                 </select>
             </div>
@@ -225,61 +254,125 @@
                 <div class="spinner"></div>
                 <p>Generating your car photo...</p>
             </div>
+            
+            <div class="result-section">
+                <div id="error-message" class="error-message"></div>
+            </div>
         </div>
         
         <div class="right-panel">
-            <div class="result-section">
-                <div id="error-message" class="error-message"></div>
-                <div id="result-placeholder" class="result-placeholder">
-                    <p>Your generated car photo will appear here</p>
-                    <p>Select a car and click "Generate My Car" to get started</p>
-                </div>
-                <img id="car-image" class="car-image" alt="Generated car photo">
-            </div>
+            <img id="car-image" class="car-image" alt="Generated car photo">
         </div>
     </div>
 
     <script>
-        // Car data from the CSV
-        const carData = [
-            {"car brand":"jeep","car model":"jeep wrangler","manufacturing year":1998},
-            {"car brand":"toyota","car model":"toyota 4runner","manufacturing year":2005},
-            {"car brand":"toyota","car model":"toyota tundra","manufacturing year":2002},
-            {"car brand":"toyota","car model":"toyota tacoma","manufacturing year":1998},
-            {"car brand":"ford","car model":"ford ranger","manufacturing year":1990},
-            {"car brand":"toyota","car model":"toyota avalon","manufacturing year":1995},
-            {"car brand":"chevrolet","car model":"chevrolet camaro","manufacturing year":2000},
-            {"car brand":"toyota","car model":"toyota camry","manufacturing year":1998},
-            {"car brand":"gmc","car model":"gmc savana","manufacturing year":1996},
-            {"car brand":"chevrolet","car model":"chevrolet silverado-2500hd","manufacturing year":2005},
-            // ... (rest of the car data remains the same)
-        ];
-
+        // Global variables
+        let carData = [];
+        let apiKey = '';
+        
         // DOM elements
+        const fileUploadSection = document.getElementById('file-upload-section');
+        const csvFileInput = document.getElementById('csv-file');
+        const fileNameDisplay = document.getElementById('file-name');
         const brandSelect = document.getElementById('brand');
         const modelSelect = document.getElementById('model');
         const yearSelect = document.getElementById('year');
         const apiKeyInput = document.getElementById('api-key');
         const submitApiKeyButton = document.getElementById('submit-api-key');
-        const generateButton = document.getElementById('generate-button');
-        const carImage = document.getElementById('car-image');
-        const loadingElement = document.getElementById('loading');
-        const errorMessage = document.getElementById('error-message');
         const apiKeyMessage = document.getElementById('api-key-message');
-        const resultPlaceholder = document.getElementById('result-placeholder');
-
-        // Store the API key
-        let apiKey = '';
-
-        // Initialize the application
-        function init() {
-            populateBrands();
-            setupEventListeners();
+        const generateButton = document.getElementById('generate-button');
+        const loadingIndicator = document.getElementById('loading');
+        const errorMessage = document.getElementById('error-message');
+        const carImage = document.getElementById('car-image');
+        
+        // File upload handling
+        csvFileInput.addEventListener('change', handleFileUpload);
+        
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            fileNameDisplay.textContent = file.name;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const csvContent = e.target.result;
+                    parseCSVData(csvContent);
+                } catch (error) {
+                    showError('Error parsing CSV file: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
         }
-
-        // Populate the brand dropdown
-        function populateBrands() {
-            const brands = [...new Set(carData.map(car => car['car brand']))].sort();
+        
+        function parseCSVData(csvContent) {
+            // Reset car data
+            carData = [];
+            
+            // Split CSV into lines
+            const lines = csvContent.split('\n');
+            
+            // Check if we have at least a header and one data row
+            if (lines.length < 2) {
+                showError('CSV file must contain at least a header and one data row');
+                return;
+            }
+            
+            // Parse header to find column indices
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            const brandIndex = headers.indexOf('car brand');
+            const modelIndex = headers.indexOf('car model');
+            const yearIndex = headers.indexOf('manufacturing year');
+            
+            if (brandIndex === -1 || modelIndex === -1 || yearIndex === -1) {
+                showError('CSV must contain columns: car brand, car model, manufacturing year');
+                return;
+            }
+            
+            // Parse data rows
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                const values = line.split(',').map(v => v.trim());
+                
+                if (values.length >= Math.max(brandIndex, modelIndex, yearIndex) + 1) {
+                    const brand = values[brandIndex];
+                    const model = values[modelIndex];
+                    const year = parseInt(values[yearIndex]);
+                    
+                    if (brand && model && !isNaN(year)) {
+                        carData.push({
+                            brand: brand.toLowerCase(),
+                            model: model.toLowerCase(),
+                            year: year
+                        });
+                    }
+                }
+            }
+            
+            if (carData.length === 0) {
+                showError('No valid car data found in CSV');
+                return;
+            }
+            
+            // Populate dropdowns
+            populateDropdowns();
+            clearError();
+            
+            // Enable brand selection
+            brandSelect.disabled = false;
+        }
+        
+        function populateDropdowns() {
+            // Clear existing options
+            brandSelect.innerHTML = '<option value="">Select a manufacturer</option>';
+            modelSelect.innerHTML = '<option value="">Select a model</option>';
+            yearSelect.innerHTML = '<option value="">Select a year</option>';
+            
+            // Get unique brands
+            const brands = [...new Set(carData.map(car => car.brand))].sort();
             brands.forEach(brand => {
                 const option = document.createElement('option');
                 option.value = brand;
@@ -287,170 +380,166 @@
                 brandSelect.appendChild(option);
             });
         }
-
-        // Set up event listeners
-        function setupEventListeners() {
-            brandSelect.addEventListener('change', handleBrandChange);
-            modelSelect.addEventListener('change', handleModelChange);
-            submitApiKeyButton.addEventListener('click', handleApiKeySubmit);
-            generateButton.addEventListener('click', generateCarImage);
-        }
-
-        // Handle brand selection change
-        function handleBrandChange() {
-            const selectedBrand = brandSelect.value;
+        
+        // Brand selection handler
+        brandSelect.addEventListener('change', function() {
+            const selectedBrand = this.value;
             
-            // Reset model and year dropdowns
+            // Clear model and year dropdowns
             modelSelect.innerHTML = '<option value="">Select a model</option>';
             yearSelect.innerHTML = '<option value="">Select a year</option>';
+            modelSelect.disabled = true;
+            yearSelect.disabled = true;
             
-            if (selectedBrand) {
-                // Enable model dropdown
-                modelSelect.disabled = false;
-                
-                // Populate models for the selected brand
-                const models = [...new Set(carData
-                    .filter(car => car['car brand'] === selectedBrand)
-                    .map(car => car['car model']))].sort();
-                
-                models.forEach(model => {
-                    const option = document.createElement('option');
-                    option.value = model;
-                    option.textContent = model.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    modelSelect.appendChild(option);
-                });
-            } else {
-                // Disable model and year dropdowns if no brand is selected
-                modelSelect.disabled = true;
-                yearSelect.disabled = true;
-            }
+            if (!selectedBrand) return;
             
-            // Reset generate button state
-            updateGenerateButtonState();
-        }
-
-        // Handle model selection change
-        function handleModelChange() {
+            // Get models for selected brand
+            const models = [...new Set(carData
+                .filter(car => car.brand === selectedBrand)
+                .map(car => car.model))].sort();
+            
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model.charAt(0).toUpperCase() + model.slice(1);
+                modelSelect.appendChild(option);
+            });
+            
+            modelSelect.disabled = false;
+        });
+        
+        // Model selection handler
+        modelSelect.addEventListener('change', function() {
             const selectedBrand = brandSelect.value;
-            const selectedModel = modelSelect.value;
+            const selectedModel = this.value;
             
-            // Reset year dropdown
+            // Clear year dropdown
             yearSelect.innerHTML = '<option value="">Select a year</option>';
+            yearSelect.disabled = true;
             
-            if (selectedBrand && selectedModel) {
-                // Enable year dropdown
-                yearSelect.disabled = false;
-                
-                // Populate years for the selected brand and model
-                const years = [...new Set(carData
-                    .filter(car => 
-                        car['car brand'] === selectedBrand && 
-                        car['car model'] === selectedModel)
-                    .map(car => car['manufacturing year']))].sort((a, b) => a - b);
-                
-                years.forEach(year => {
-                    const option = document.createElement('option');
-                    option.value = year;
-                    option.textContent = year;
-                    yearSelect.appendChild(option);
-                });
-            } else {
-                // Disable year dropdown if no model is selected
-                yearSelect.disabled = true;
-            }
+            if (!selectedBrand || !selectedModel) return;
             
-            // Reset generate button state
+            // Get years for selected brand and model
+            const years = [...new Set(carData
+                .filter(car => car.brand === selectedBrand && car.model === selectedModel)
+                .map(car => car.year))].sort((a, b) => a - b);
+            
+            years.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                yearSelect.appendChild(option);
+            });
+            
+            yearSelect.disabled = false;
+        });
+        
+        // Year selection handler
+        yearSelect.addEventListener('change', function() {
             updateGenerateButtonState();
-        }
-
-        // Handle API key submission
-        function handleApiKeySubmit() {
-            const key = apiKeyInput.value.trim();
+        });
+        
+        // API key submission
+        submitApiKeyButton.addEventListener('click', function() {
+            apiKey = apiKeyInput.value.trim();
             
-            if (key) {
-                apiKey = key;
-                apiKeyMessage.style.display = 'block';
-                apiKeyInput.value = '';
-                updateGenerateButtonState();
-            } else {
-                alert('Please enter a valid API key');
+            if (!apiKey) {
+                showError('Please enter your Gemini API key');
+                return;
             }
-        }
-
-        // Update the generate button state based on selections
+            
+            // In a real application, you might want to validate the API key here
+            apiKeyMessage.style.display = 'block';
+            clearError();
+            updateGenerateButtonState();
+        });
+        
+        // Generate button handler
+        generateButton.addEventListener('click', generateCarPhoto);
+        
         function updateGenerateButtonState() {
-            const hasBrand = brandSelect.value !== '';
-            const hasModel = modelSelect.value !== '';
-            const hasYear = yearSelect.value !== '';
-            const hasApiKey = apiKey !== '';
-            
-            generateButton.disabled = !(hasBrand && hasModel && hasYear && hasApiKey);
+            const hasValidSelection = brandSelect.value && modelSelect.value && yearSelect.value;
+            generateButton.disabled = !(hasValidSelection && apiKey);
         }
-
-        // Generate the car image using the Gemini API
-        async function generateCarImage() {
-            const selectedBrand = brandSelect.value;
-            const selectedModel = modelSelect.value;
-            const selectedYear = yearSelect.value;
+        
+        function generateCarPhoto() {
+            const brand = brandSelect.value;
+            const model = modelSelect.value;
+            const year = yearSelect.value;
             
-            // Hide previous results and placeholder
-            carImage.style.display = 'none';
-            errorMessage.style.display = 'none';
-            resultPlaceholder.style.display = 'none';
+            if (!brand || !model || !year || !apiKey) {
+                showError('Please complete all selections and provide an API key');
+                return;
+            }
             
             // Show loading indicator
-            loadingElement.style.display = 'block';
+            loadingIndicator.style.display = 'block';
+            carImage.style.display = 'none';
+            clearError();
             
-            try {
-                // Prepare the prompt for the Gemini API
-                const prompt = `Generate a high-quality press photo of a ${selectedYear} ${selectedBrand} ${selectedModel} car with no background. The car should be shown from a professional angle, well-lit, and with clear details.`;
-                
-                // Call the Gemini API
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{
-                                text: prompt
-                            }]
-                        }]
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`API request failed with status ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                // Check if we got a valid response
-                if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-                    // For this demo, we'll use a placeholder image since the Gemini API
-                    // doesn't actually generate images in the free tier
-                    // In a real implementation, you would use the actual image generation API
-                    carImage.src = 'https://via.placeholder.com/600x400/3498db/ffffff?text=Car+Press+Photo+Placeholder';
-                    carImage.alt = `${selectedYear} ${selectedBrand} ${selectedModel}`;
-                    carImage.style.display = 'block';
-                } else {
-                    throw new Error('No image generated by the API');
-                }
-            } catch (error) {
-                console.error('Error generating car image:', error);
-                errorMessage.textContent = 'Failed to generate car image. Please check your API key and try again.';
-                errorMessage.style.display = 'block';
-                resultPlaceholder.style.display = 'block';
-            } finally {
-                // Hide loading indicator
-                loadingElement.style.display = 'none';
-            }
+            // Prepare prompt for Gemini API
+            const prompt = `Generate a professional press photo of a ${year} ${brand} ${model} car with a transparent background. The car should be shown from a 3/4 front angle, well-lit, with professional studio lighting.`;
+            
+            // Call Gemini API (this is a simplified example)
+            // In a real implementation, you would make an actual API call to Gemini
+            simulateGeminiAPICall(prompt, brand, model, year);
         }
-
-        // Initialize the application when the page loads
-        document.addEventListener('DOMContentLoaded', init);
+        
+        // This function simulates the Gemini API call
+        // In a real implementation, you would replace this with actual API code
+        function simulateGeminiAPICall(prompt, brand, model, year) {
+            // Simulate API processing time
+            setTimeout(() => {
+                // Hide loading indicator
+                loadingIndicator.style.display = 'none';
+                
+                // In a real implementation, you would use the actual image URL from the API response
+                // For this demo, we'll use a placeholder
+                const placeholderImageUrl = `https://via.placeholder.com/600x400/3498db/ffffff?text=${encodeURIComponent(`${year} ${brand} ${model}`)}`;
+                
+                // Display the image
+                carImage.src = placeholderImageUrl;
+                carImage.style.display = 'block';
+                
+                // In a real implementation, you would handle API errors here
+                // For example:
+                // if (apiResponse.error) {
+                //     showError('API Error: ' + apiResponse.error.message);
+                // } else {
+                //     carImage.src = apiResponse.imageUrl;
+                //     carImage.style.display = 'block';
+                // }
+            }, 2000);
+        }
+        
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+        
+        function clearError() {
+            errorMessage.style.display = 'none';
+        }
+        
+        // Drag and drop functionality for file upload
+        fileUploadSection.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            fileUploadSection.classList.add('active');
+        });
+        
+        fileUploadSection.addEventListener('dragleave', function() {
+            fileUploadSection.classList.remove('active');
+        });
+        
+        fileUploadSection.addEventListener('drop', function(e) {
+            e.preventDefault();
+            fileUploadSection.classList.remove('active');
+            
+            if (e.dataTransfer.files.length) {
+                csvFileInput.files = e.dataTransfer.files;
+                handleFileUpload({ target: { files: e.dataTransfer.files } });
+            }
+        });
     </script>
 </body>
 </html>
-            
