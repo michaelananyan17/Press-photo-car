@@ -20,12 +20,28 @@
         }
         
         .container {
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
             background-color: white;
             border-radius: 10px;
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
             padding: 30px;
+            display: flex;
+            gap: 30px;
+        }
+        
+        .functionality-section {
+            flex: 1;
+            padding-right: 30px;
+            border-right: 1px solid #eee;
+        }
+        
+        .photo-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
         
         h1 {
@@ -97,10 +113,12 @@
         .result-section {
             margin-top: 30px;
             text-align: center;
+            width: 100%;
         }
         
         .car-image {
             max-width: 100%;
+            max-height: 400px;
             border-radius: 10px;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
             margin-top: 20px;
@@ -138,51 +156,112 @@
             margin-top: 10px;
             display: none;
         }
+        
+        .photo-placeholder {
+            width: 100%;
+            height: 400px;
+            background-color: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+            margin-bottom: 20px;
+        }
+        
+        .photo-placeholder i {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .photo-info {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .photo-info h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .photo-info p {
+            color: #7f8c8d;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .functionality-section {
+                padding-right: 0;
+                border-right: none;
+                border-bottom: 1px solid #eee;
+                padding-bottom: 30px;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Car Press Photo Generator</h1>
-        <p class="description">Select a car from the dataset and generate a press photo with no background using the Gemini API</p>
-        
-        <div class="form-group">
-            <label for="brand">Car Manufacturer</label>
-            <select id="brand">
-                <option value="">Select a manufacturer</option>
-            </select>
+        <div class="functionality-section">
+            <h1>Car Press Photo Generator</h1>
+            <p class="description">Select a car from the dataset and generate a press photo with no background using the Gemini API</p>
+            
+            <div class="form-group">
+                <label for="brand">Car Manufacturer</label>
+                <select id="brand">
+                    <option value="">Select a manufacturer</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="model">Car Model</label>
+                <select id="model" disabled>
+                    <option value="">Select a model</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="year">Manufacturing Year</label>
+                <select id="year" disabled>
+                    <option value="">Select a year</option>
+                </select>
+            </div>
+            
+            <div class="api-key-section">
+                <label for="api-key">Gemini API Key</label>
+                <input type="password" id="api-key" placeholder="Enter your Gemini API key">
+                <button id="submit-api-key">Submit API Key</button>
+                <div id="api-key-message" class="success-message">API key submitted successfully!</div>
+            </div>
+            
+            <button id="generate-button" disabled>Generate My Car</button>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Generating your car photo...</p>
+            </div>
+            
+            <div class="result-section">
+                <div id="error-message" class="error-message"></div>
+            </div>
         </div>
         
-        <div class="form-group">
-            <label for="model">Car Model</label>
-            <select id="model" disabled>
-                <option value="">Select a model</option>
-            </select>
-        </div>
-        
-        <div class="form-group">
-            <label for="year">Manufacturing Year</label>
-            <select id="year" disabled>
-                <option value="">Select a year</option>
-            </select>
-        </div>
-        
-        <div class="api-key-section">
-            <label for="api-key">Gemini API Key</label>
-            <input type="password" id="api-key" placeholder="Enter your Gemini API key">
-            <button id="submit-api-key">Submit API Key</button>
-            <div id="api-key-message" class="success-message">API key submitted successfully!</div>
-        </div>
-        
-        <button id="generate-button" disabled>Generate My Car</button>
-        
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>Generating your car photo...</p>
-        </div>
-        
-        <div class="result-section">
-            <div id="error-message" class="error-message"></div>
+        <div class="photo-section">
+            <div class="photo-placeholder" id="photo-placeholder">
+                <i>🚗</i>
+                <p>Your generated car photo will appear here</p>
+            </div>
+            
             <img id="car-image" class="car-image" alt="Generated car photo">
+            
+            <div class="photo-info" id="photo-info" style="display: none;">
+                <h3 id="car-title"></h3>
+                <p id="car-description"></p>
+            </div>
         </div>
     </div>
 
@@ -2776,7 +2855,7 @@
             {"car brand":"gmc","car model":"gmc canyon","manufacturing year":2012},
             {"car brand":"gmc","car model":"gmc sierra-1500","manufacturing year":2008},
             {"car brand":"toyota","car model":"toyota corolla","manufacturing year":2010},
-            {"car brand":"chrysler","car model":"chrysler pacifica","manufacturing year":2019},
+            {"car brand":"chrysler","car model":"chrysler pacifica","manufacturing year":2021},
             {"car brand":"hyundai","car model":"hyundai tucson","manufacturing year":2009},
             {"car brand":"toyota","car model":"toyota sienna","manufacturing year":2013},
             {"car brand":"honda","car model":"honda cr-v","manufacturing year":2017},
@@ -2831,7 +2910,7 @@
             {"car brand":"audi","car model":"audi rs-5","manufacturing year":2021},
             {"car brand":"gmc","car model":"gmc sierra-2500hd","manufacturing year":2010},
             {"car brand":"mazda","car model":"mazda mx-5-miata","manufacturing year":2008},
-            {"car brand":"audi","car model":"audi s5","manufacturing year":2015}
+            {"car brand":"audi","car model":"audi s
         ];
 
         // DOM elements
@@ -2845,6 +2924,10 @@
         const loadingElement = document.getElementById('loading');
         const errorMessage = document.getElementById('error-message');
         const apiKeyMessage = document.getElementById('api-key-message');
+        const photoPlaceholder = document.getElementById('photo-placeholder');
+        const photoInfo = document.getElementById('photo-info');
+        const carTitle = document.getElementById('car-title');
+        const carDescription = document.getElementById('car-description');
 
         // Store the API key
         let apiKey = '';
@@ -2974,6 +3057,8 @@
             // Hide previous results
             carImage.style.display = 'none';
             errorMessage.style.display = 'none';
+            photoPlaceholder.style.display = 'none';
+            photoInfo.style.display = 'none';
             
             // Show loading indicator
             loadingElement.style.display = 'block';
@@ -3003,29 +3088,4 @@
                 
                 const data = await response.json();
                 
-                // Check if we got a valid response
-                if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-                    // For this demo, we'll use a placeholder image since the Gemini API
-                    // doesn't actually generate images in the free tier
-                    // In a real implementation, you would use the actual image generation API
-                    carImage.src = 'https://via.placeholder.com/600x400/3498db/ffffff?text=Car+Press+Photo+Placeholder';
-                    carImage.alt = `${selectedYear} ${selectedBrand} ${selectedModel}`;
-                    carImage.style.display = 'block';
-                } else {
-                    throw new Error('No image generated by the API');
-                }
-            } catch (error) {
-                console.error('Error generating car image:', error);
-                errorMessage.textContent = 'Failed to generate car image. Please check your API key and try again.';
-                errorMessage.style.display = 'block';
-            } finally {
-                // Hide loading indicator
-                loadingElement.style.display = 'none';
-            }
-        }
-
-        // Initialize the application when the page loads
-        document.addEventListener('DOMContentLoaded', init);
-    </script>
-</body>
-</html>
+            
