@@ -58,6 +58,8 @@
             padding: 20px;
             text-align: center;
             transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
         
         .image-display-container.has-image {
@@ -227,6 +229,15 @@
             margin-top: 5px;
         }
         
+        .car-info {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            text-align: center;
+            display: none;
+        }
+        
         @media (max-width: 768px) {
             .container {
                 flex-direction: column;
@@ -301,6 +312,7 @@
                 <div class="placeholder-text">Your generated car photo will appear here</div>
                 <img id="car-image" class="car-image" alt="Generated car photo">
             </div>
+            <div class="car-info" id="car-info"></div>
         </div>
     </div>
 
@@ -324,6 +336,26 @@
         const errorMessage = document.getElementById('error-message');
         const carImage = document.getElementById('car-image');
         const imageDisplayContainer = document.getElementById('image-display-container');
+        const carInfo = document.getElementById('car-info');
+        
+        // Sample car data for testing if no CSV is uploaded
+        const sampleCarData = [
+            {"brand": "toyota", "model": "camry", "year": 2020},
+            {"brand": "honda", "model": "civic", "year": 2019},
+            {"brand": "ford", "model": "mustang", "year": 2021},
+            {"brand": "chevrolet", "model": "corvette", "year": 2022},
+            {"brand": "bmw", "model": "3 series", "year": 2020},
+            {"brand": "audi", "model": "a4", "year": 2021},
+            {"brand": "mercedes", "model": "c-class", "year": 2019},
+            {"brand": "tesla", "model": "model 3", "year": 2022}
+        ];
+        
+        // Initialize with sample data
+        window.addEventListener('DOMContentLoaded', function() {
+            carData = sampleCarData;
+            populateDropdowns();
+            brandSelect.disabled = false;
+        });
         
         // File upload handling
         csvFileInput.addEventListener('change', handleFileUpload);
@@ -341,7 +373,16 @@
                     parseCSVData(csvContent);
                 } catch (error) {
                     showError('Error parsing CSV file: ' + error.message);
+                    // Fall back to sample data
+                    carData = sampleCarData;
+                    populateDropdowns();
                 }
+            };
+            reader.onerror = function() {
+                showError('Error reading file');
+                // Fall back to sample data
+                carData = sampleCarData;
+                populateDropdowns();
             };
             reader.readAsText(file);
         }
@@ -355,18 +396,22 @@
             
             // Check if we have at least a header and one data row
             if (lines.length < 2) {
-                showError('CSV file must contain at least a header and one data row');
+                showError('CSV file must contain at least a header and one data row. Using sample data instead.');
+                carData = sampleCarData;
+                populateDropdowns();
                 return;
             }
             
             // Parse header to find column indices
-            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-            const brandIndex = headers.indexOf('car brand');
-            const modelIndex = headers.indexOf('car model');
-            const yearIndex = headers.indexOf('manufacturing year');
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+            const brandIndex = headers.findIndex(h => h.includes('brand'));
+            const modelIndex = headers.findIndex(h => h.includes('model'));
+            const yearIndex = headers.findIndex(h => h.includes('year'));
             
             if (brandIndex === -1 || modelIndex === -1 || yearIndex === -1) {
-                showError('CSV must contain columns: car brand, car model, manufacturing year');
+                showError('CSV must contain columns: car brand, car model, manufacturing year. Using sample data instead.');
+                carData = sampleCarData;
+                populateDropdowns();
                 return;
             }
             
@@ -375,7 +420,24 @@
                 const line = lines[i].trim();
                 if (!line) continue;
                 
-                const values = line.split(',').map(v => v.trim());
+                // Simple CSV parsing - split by comma but handle quoted values
+                const values = [];
+                let current = '';
+                let inQuotes = false;
+                
+                for (let j = 0; j < line.length; j++) {
+                    const char = line[j];
+                    
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        values.push(current.trim().replace(/"/g, ''));
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                values.push(current.trim().replace(/"/g, ''));
                 
                 if (values.length >= Math.max(brandIndex, modelIndex, yearIndex) + 1) {
                     const brand = values[brandIndex];
@@ -393,8 +455,8 @@
             }
             
             if (carData.length === 0) {
-                showError('No valid car data found in CSV');
-                return;
+                showError('No valid car data found in CSV. Using sample data instead.');
+                carData = sampleCarData;
             }
             
             // Populate dropdowns
@@ -515,6 +577,7 @@
             // Show loading indicator
             loadingIndicator.style.display = 'block';
             carImage.style.display = 'none';
+            carInfo.style.display = 'none';
             clearError();
             
             // Prepare prompt for Gemini API
@@ -533,16 +596,49 @@
                 // Hide loading indicator
                 loadingIndicator.style.display = 'none';
                 
-                // In a real implementation, you would use the actual image URL from the API response
-                // For this demo, we'll use a placeholder
-                const placeholderImageUrl = `https://via.placeholder.com/600x400/3498db/ffffff?text=${encodeURIComponent(`${year} ${brand} ${model}`)}`;
+                // Create a canvas to generate a car image
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = 600;
+                canvas.height = 400;
+                
+                // Draw background
+                ctx.fillStyle = '#3498db';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw a simple car shape
+                ctx.fillStyle = '#e74c3c'; // Car body color
+                ctx.fillRect(100, 200, 400, 100); // Car body
+                ctx.fillRect(150, 150, 300, 50); // Car top
+                
+                // Draw wheels
+                ctx.fillStyle = '#2c3e50';
+                ctx.beginPath();
+                ctx.arc(180, 320, 30, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(420, 320, 30, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Add car text
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${year} ${brand} ${model}`, canvas.width / 2, 100);
+                
+                // Convert canvas to data URL
+                const dataURL = canvas.toDataURL('image/png');
                 
                 // Display the image
-                carImage.src = placeholderImageUrl;
+                carImage.src = dataURL;
                 carImage.style.display = 'block';
                 
                 // Update the display container to show it has an image
                 imageDisplayContainer.classList.add('has-image');
+                
+                // Show car info
+                carInfo.innerHTML = `<strong>${year} ${brand.charAt(0).toUpperCase() + brand.slice(1)} ${model.charAt(0).toUpperCase() + model.slice(1)}</strong>`;
+                carInfo.style.display = 'block';
                 
                 // In a real implementation, you would handle API errors here
                 // For example:
@@ -587,4 +683,3 @@
     </script>
 </body>
 </html>
-
