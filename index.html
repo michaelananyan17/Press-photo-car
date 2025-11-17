@@ -244,6 +244,15 @@
             margin-top: 5px;
         }
         
+        .demo-mode {
+            background-color: #ffeaa7;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
         @media (max-width: 768px) {
             .container {
                 flex-direction: column;
@@ -299,6 +308,9 @@
                 <div class="api-info">Your API key is stored locally and never sent to our servers</div>
                 <button id="submit-api-key">Submit API Key</button>
                 <div id="api-key-message" class="success-message">API key submitted successfully!</div>
+                <div class="demo-mode" id="demo-mode">
+                    <strong>Demo Mode:</strong> No API key needed for demonstration
+                </div>
             </div>
             
             <button id="generate-button" disabled>Generate My Car</button>
@@ -327,6 +339,7 @@
         // Global variables
         let carData = [];
         let apiKey = '';
+        let useRealAPI = false;
         
         // DOM elements
         const fileUploadSection = document.getElementById('file-upload-section');
@@ -344,6 +357,7 @@
         const carImage = document.getElementById('car-image');
         const imageDisplayContainer = document.getElementById('image-display-container');
         const carInfo = document.getElementById('car-info');
+        const demoMode = document.getElementById('demo-mode');
         
         // Sample car data for testing if no CSV is uploaded
         const sampleCarData = [
@@ -357,11 +371,25 @@
             {"brand": "tesla", "model": "model 3", "year": 2022}
         ];
         
+        // Car image mapping for demo mode
+        const carImageMap = {
+            "toyota-camry": "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?w=600&h=400&fit=crop",
+            "honda-civic": "https://images.unsplash.com/photo-1603584173870-7f23fdae1b7a?w=600&h=400&fit=crop",
+            "ford-mustang": "https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=600&h=400&fit=crop",
+            "chevrolet-corvette": "https://images.unsplash.com/photo-1624704766722-6d289e0e3e5e?w=600&h=400&fit=crop",
+            "bmw-3 series": "https://images.unsplash.com/photo-1555215695-3004980ad54e?w=600&h=400&fit=crop",
+            "audi-a4": "https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?w=600&h=400&fit=crop",
+            "mercedes-c-class": "https://images.unsplash.com/photo-1563720223485-40d6c09319de?w=600&h=400&fit=crop",
+            "tesla-model 3": "https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=600&h=400&fit=crop"
+        };
+        
         // Initialize with sample data
         window.addEventListener('DOMContentLoaded', function() {
             carData = sampleCarData;
             populateDropdowns();
             brandSelect.disabled = false;
+            // Enable demo mode by default
+            updateGenerateButtonState();
         });
         
         // File upload handling
@@ -553,7 +581,13 @@
             apiKey = apiKeyInput.value.trim();
             
             if (!apiKey) {
-                showError('Please enter your OpenAI API key');
+                // No API key provided, use demo mode
+                useRealAPI = false;
+                apiKeyMessage.textContent = "Using demo mode with sample images";
+                apiKeyMessage.style.display = 'block';
+                demoMode.style.display = 'block';
+                clearError();
+                updateGenerateButtonState();
                 return;
             }
             
@@ -563,7 +597,10 @@
                 return;
             }
             
+            useRealAPI = true;
+            apiKeyMessage.textContent = "API key submitted successfully! Using real OpenAI API.";
             apiKeyMessage.style.display = 'block';
+            demoMode.style.display = 'none';
             clearError();
             updateGenerateButtonState();
         });
@@ -573,7 +610,8 @@
         
         function updateGenerateButtonState() {
             const hasValidSelection = brandSelect.value && modelSelect.value && yearSelect.value;
-            generateButton.disabled = !(hasValidSelection && apiKey);
+            // Enable button if we have valid selection (demo mode works without API key)
+            generateButton.disabled = !hasValidSelection;
         }
         
         async function generateCarPhoto() {
@@ -581,8 +619,8 @@
             const model = modelSelect.value;
             const year = yearSelect.value;
             
-            if (!brand || !model || !year || !apiKey) {
-                showError('Please complete all selections and provide an API key');
+            if (!brand || !model || !year) {
+                showError('Please complete all selections');
                 return;
             }
             
@@ -595,26 +633,22 @@
             // Prepare prompt for OpenAI API
             const prompt = `Professional press photo of a ${year} ${brand} ${model} car, studio lighting, clean background, 3/4 front view, high detail, photorealistic`;
             
-            // Call OpenAI API
+            // Call OpenAI API or use demo mode
             try {
-                await callOpenAIDalleAPI(prompt, brand, model, year);
+                if (useRealAPI && apiKey) {
+                    await callRealOpenAIDalleAPI(prompt, brand, model, year);
+                } else {
+                    await useDemoMode(brand, model, year);
+                }
             } catch (error) {
                 showError('Error generating image: ' + error.message);
                 loadingIndicator.style.display = 'none';
             }
         }
         
-        // Function to call OpenAI DALL-E API
-        async function callOpenAIDalleAPI(prompt, brand, model, year) {
+        // Function to call real OpenAI DALL-E API
+        async function callRealOpenAIDalleAPI(prompt, brand, model, year) {
             try {
-                // In a real implementation, you would make an actual API call to OpenAI
-                // For security reasons, we'll simulate the API call in this example
-                
-                // Simulate API processing time
-                await new Promise(resolve => setTimeout(resolve, 3000));
-                
-                // In a real implementation, you would use code like this:
-                /*
                 const response = await fetch('https://api.openai.com/v1/images/generations', {
                     method: 'POST',
                     headers: {
@@ -637,14 +671,9 @@
                 
                 const data = await response.json();
                 const imageUrl = data.data[0].url;
-                */
-                
-                // For this demo, we'll use a placeholder image
-                // In a real implementation, you would use the actual image URL from the API response
-                const placeholderImageUrl = `https://placehold.co/600x400/10a37f/white?text=${encodeURIComponent(`${year} ${brand} ${model}`)}&font=montserrat`;
                 
                 // Display the image
-                carImage.src = placeholderImageUrl;
+                carImage.src = imageUrl;
                 carImage.style.display = 'block';
                 
                 // Update the display container to show it has an image
@@ -660,6 +689,37 @@
             } catch (error) {
                 throw new Error('Failed to generate image: ' + error.message);
             }
+        }
+        
+        // Function to use demo mode with pre-loaded images
+        async function useDemoMode(brand, model, year) {
+            // Simulate API processing time
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            const carKey = `${brand}-${model}`.toLowerCase();
+            let imageUrl;
+            
+            // Check if we have a pre-loaded image for this car
+            if (carImageMap[carKey]) {
+                imageUrl = carImageMap[carKey];
+            } else {
+                // Use a generic car image
+                imageUrl = `https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=600&h=400&fit=crop&auto=format`;
+            }
+            
+            // Display the image
+            carImage.src = imageUrl;
+            carImage.style.display = 'block';
+            
+            // Update the display container to show it has an image
+            imageDisplayContainer.classList.add('has-image');
+            
+            // Show car info
+            carInfo.innerHTML = `<strong>${year} ${brand.charAt(0).toUpperCase() + brand.slice(1)} ${model.charAt(0).toUpperCase() + model.slice(1)}</strong> - Demo Mode (Real car photo)`;
+            carInfo.style.display = 'block';
+            
+            // Hide loading indicator
+            loadingIndicator.style.display = 'none';
         }
         
         function showError(message) {
